@@ -103,13 +103,9 @@ function publicView(t){
     '<div class="stats"><div class="stat"><strong>'+n+'</strong><span>Inscriptos</span></div>'+
       '<div class="stat"><strong>'+t.capacity+'</strong><span>Cupos</span></div>'+
       '<div class="stat"><strong>'+Math.max(0,t.capacity-n)+'</strong><span>Disponibles</span></div></div>'+
-    (t.status==='open'&&n<t.capacity?'<div class="panel"><h2>📝 Inscribirme</h2><p class="muted small">Colocá tu ID. Buscamos automáticamente tu nombre de Free Fire y vos confirmás la inscripción.</p>'+
-      '<div class="field"><label>Tu ID de Free Fire</label><input id="uidInput" type="text" inputmode="numeric" maxlength="15" autocomplete="off" placeholder="Ejemplo: 4557022548" oninput="idChanged()" value="'+esc(uidTyped)+'"></div>'+
-      '<div class="between"><span class="sub">Región: '+esc(t.region)+'</span>'+button('🔎 Verificar ID','doLookup()','small')+'</div>'+
-      '<div id="lookupState" class="note">Introducí tu ID para comprobar el nickname.</div>'+
-      '<button id="joinBtn" class="btn primary full" disabled onclick="join()">Confirmar inscripción</button>'+
-      '<div class="note">El ID y nickname se mostrarán en el torneo. Consultar un ID no demuestra que seas el propietario de esa cuenta.</div></div>':
-      '<div class="panel">'+empty('🔒','Inscripciones no disponibles',n>=t.capacity?'Cupos completos.':stateLabel(t.status))+ '</div>')+
+    (t.status==='open'&&n<t.capacity?
+      '<div class="panel"><h2>📝 Inscribirme</h2><p class="muted small">Con tu cuenta de jugador de JS Family podés anotarte con un toque, sin escribir el ID cada vez.</p><a class="btn primary full" href="/player?event='+encodeURIComponent(t.slug)+'">Entrar con mi cuenta →</a></div>':
+      '<div class="panel">'+empty('🔒','Inscripciones no disponibles',n>=t.capacity?'Cupos completos.':stateLabel(t.status))+'</div>')+
     '<div class="panel"><h2>🔗 Compartir torneo</h2><div class="share"><input id="shareLink" readonly value="'+esc(share)+'">'+button('Copiar','copyLink()','primary')+'</div></div>'+
     '<div class="twocol"><section class="panel"><h2>👥 Participantes ('+n+')</h2>'+ (n?t.players.map(playerCard).join(''):empty('👥','Aún no hay inscriptos','Sé el primero en anotarte.'))+'</section>'+
     '<section class="panel"><h2>🏆 Llaves del torneo</h2>'+bracketUI(t,false)+'</section></div>';
@@ -215,6 +211,7 @@ async function win(key,uid){
   }catch(e){tip(e.message)}
 }
 async function boot(){
+  if(location.pathname==='/player')return playerStart();
   if(location.pathname==='/admin')return adminStart();
   if(location.pathname.startsWith('/t/'))return loadTournament();
   return showHome();

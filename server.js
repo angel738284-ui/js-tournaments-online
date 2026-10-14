@@ -122,6 +122,7 @@ async function init(){
   await pool.query("create table if not exists registrations (id bigserial primary key,tournament_id bigint not null references tournaments(id) on delete cascade,uid text not null,nickname text not null,region text not null,level int not null default 0,created_at timestamptz not null default now(),unique(tournament_id,uid))");
   await pool.query('create index if not exists registrations_tournament_idx on registrations(tournament_id)');
 }
+const playerRoutes=require('./players')(app,{pool,findPlayer,limited,fail});
 app.get('/health',async(req,res)=>{
   try{await pool.query('select 1');res.json({ok:true})}catch(e){res.status(503).json({ok:false})}
 });
@@ -153,13 +154,13 @@ app.post('/api/lookup',async(req,res)=>{
   try{res.json(await findPlayer(uid,region))}
   catch(e){fail(res,502,e.message||'No se pudo consultar el jugador')}
 });
-app.post('/api/tournaments/:slug/register',async(req,res,next)=>{
+app.post('/api/tournaments/:slug/register',playerRoutes.auth,async(req,res,next)=>{
   if(limited(req,'register',8,10*60000))return fail(res,429,'Demasiados registros desde esta conexión');
-  const uid=String(req.body?.uid||'');
-  if(!validUID(uid))return fail(res,400,'Ingresá un ID válido');
+  const uid=req.player.uid;
   let t;try{t=await getTournament(req.params.slug)}catch(e){return next(e)}
   if(!t)return fail(res,404,'Torneo no encontrado');
   if(t.status!=='open')return fail(res,409,'Las inscripciones están cerradas');
+  if(t.region!==req.player.region)return fail(res,409,'Este torneo es de otra región de Free Fire');
   let verified;
   try{verified=await findPlayer(uid,t.region)}catch(e){return fail(res,502,'No se pudo verificar el ID: '+e.message)}
   const client=await pool.connect();
@@ -231,6 +232,6 @@ app.post('/api/admin/tournaments/:slug/winner',admin,async(req,res,next)=>{
   finally{client.release()}
 });
 app.use(express.static(path.join(__dirname,'public'),{maxAge:'5m'}));
-app.get(['/','/admin','/t/:slug'],(req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
+app.get(['/','/player','/admin','/t/:slug'],(req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
 app.use((err,req,res,next)=>{console.error('API Error:',err.code||err.message);fail(res,500,'Error temporal del servidor')});
-init().then(()=>app.listen(process.env.PORT||10000,'0.0.0.0',()=>console.log('JS Tournaments online ready'))).catch(e=>{console.error('Database init failed:',e.message);process.exit(1)});
+init().then(()=>playerRoutes.init()).then(()=>app.listen(process.env.PORT||10000,'0.0.0.0',()=>console.log('JS Tournaments online ready'))).catch(e=>{console.error('Database init failed:',e.message);process.exit(1)});
