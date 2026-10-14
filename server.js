@@ -157,7 +157,8 @@ app.post('/api/tournaments/:slug/register',async(req,res,next)=>{
   if(limited(req,'register',8,10*60000))return fail(res,429,'Demasiados registros desde esta conexión');
   const uid=String(req.body?.uid||'');
   if(!validUID(uid))return fail(res,400,'Ingresá un ID válido');
-  const t=await getTournament(req.params.slug).catch(next);if(!t)return;
+  let t;try{t=await getTournament(req.params.slug)}catch(e){return next(e)}
+  if(!t)return fail(res,404,'Torneo no encontrado');
   if(t.status!=='open')return fail(res,409,'Las inscripciones están cerradas');
   let verified;
   try{verified=await findPlayer(uid,t.region)}catch(e){return fail(res,502,'No se pudo verificar el ID: '+e.message)}

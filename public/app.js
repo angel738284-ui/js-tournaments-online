@@ -113,6 +113,7 @@ function publicView(t){
     '<div class="panel"><h2>🔗 Compartir torneo</h2><div class="share"><input id="shareLink" readonly value="'+esc(share)+'">'+button('Copiar','copyLink()','primary')+'</div></div>'+
     '<div class="twocol"><section class="panel"><h2>👥 Participantes ('+n+')</h2>'+ (n?t.players.map(playerCard).join(''):empty('👥','Aún no hay inscriptos','Sé el primero en anotarte.'))+'</section>'+
     '<section class="panel"><h2>🏆 Llaves del torneo</h2>'+bracketUI(t,false)+'</section></div>';
+  if(lookupResult&&lookupResult.uid===uidTyped&&t.status==='open')syncLookupStatus('✅ '+lookupResult.nickname+' · '+lookupResult.region+' · Nivel '+lookupResult.level,true);
 }
 async function loadTournament(){
   const slug=location.pathname.split('/')[2];
