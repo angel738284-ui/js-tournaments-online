@@ -1,0 +1,10 @@
+{
+  "name":"js-tournaments-online",
+  "version":"1.0.0",
+  "private":true,
+  "description":"Plataforma de torneos online para JS Family",
+  "main":"server.js",
+  "scripts":{"start":"node server.js","check":"node --check server.js && node --check public/app.js"},
+  "engines":{"node":">=20"},
+  "dependencies":{"express":"^4.21.2","pg":"^8.16.3"}
+}
