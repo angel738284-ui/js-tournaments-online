@@ -89,12 +89,12 @@ async function playerStart(){
  }catch(e){root.innerHTML=empty('⚠','No se pudo conectar',e.message)+'<button class="btn" onclick="playerStart()">Reintentar</button>'}
 }
 function playerTournamentCard(t){
- const canJoin=t.status==='open'&&!t.joined&&t.count<t.capacity;
+ const canJoin=t.status==='open'&&!!playerSelf?.verified&&!t.joined&&t.count<t.capacity;
  const href='/t/'+encodeURIComponent(t.slug);
  return '<div class="panel event"><div class="between"><span class="eyebrow">⚔ FREE FIRE · '+esc(t.region)+'</span>'+badge(t.status)+'</div>'+
  '<h2>'+esc(t.title)+'</h2>'+
  '<div class="row"><span class="muted small">👥 '+t.count+'/'+t.capacity+' jugadores</span>'+(t.joined?'<span class="badge">✓ Ya inscripto</span>':'')+'</div>'+
- '<div class="eventFoot">'+(canJoin?button('💎 Anotarme','playerJoin(\''+t.slug+'\')','primary small'):'<span class="muted small">'+(t.joined?'Tu plaza está confirmada':'Ver enfrentamientos')+'</span>')+
+ '<div class="eventFoot">'+(canJoin?button('💎 Anotarme','playerJoin(\''+t.slug+'\')','primary small'):'<span class="muted small">'+(t.joined?'Tu plaza está confirmada':!playerSelf?.verified?'Activá tu cuenta primero':'Ver enfrentamientos')+'</span>')+
  '<a class="btn small" href="'+href+'">Ver torneo ↗</a></div></div>';
 }
 async function playerDashboard(){
@@ -105,12 +105,22 @@ async function playerDashboard(){
   const t=response.tournaments||[];
   const active=t.filter(x=>x.status!=='finished'),end=t.filter(x=>x.status==='finished');
   const me=playerSelf;
-  root.innerHTML=hero('Hola, '+me.nickname,'Tu perfil está listo. Elegí un torneo y tocá «Anotarme» para participar con tu cuenta.','🎮 JS FAMILY · MI PERFIL',
+  root.innerHTML=hero('Hola, '+me.nickname,me.verified?'Tu perfil está listo. Elegí un torneo y tocá «Anotarme» para participar.':'Tu perfil está creado. Introducí el código exclusivo de tu organizador para activar las inscripciones.','🎮 JS FAMILY · MI PERFIL',
     '<div class="btnrow"><button class="btn" onclick="playerDashboard()">↻ Actualizar</button><button class="btn outline" onclick="playerLogout()">Cerrar sesión</button></div>')+
     '<div class="panel"><div class="between"><div><span class="eyebrow">CUENTA DE FREE FIRE</span><h2 style="margin:9px 0 0">'+esc(me.nickname)+'</h2><div class="muted small">ID '+esc(me.uid)+' · Región '+esc(me.region)+' · Nivel '+me.level+'</div></div><span class="logo">JS</span></div><div class="note">El nombre proviene de una consulta pública. La propiedad de la cuenta Free Fire todavía no está comprobada.</div></div>'+
     '<div class="between"><h2>🏆 Torneos de mi región</h2><span class="muted small">'+active.length+' activos</span></div>'+
     (active.length?'<div class="grid">'+active.map(playerTournamentCard).join('')+'</div>':empty('⚔','Sin torneos abiertos','El administrador todavía no creó un torneo para tu región.'))+
     (end.length?'<h2>Historial de torneos</h2><div class="grid">'+end.map(playerTournamentCard).join('')+'</div>':'');
+  if(!me.verified){
+   const activation='<section class="panel" id="activationPanel"><span class="eyebrow">🔐 ACTIVACIÓN JS FAMILY</span><h2 style="margin-top:9px">Validación pendiente</h2>'+
+      '<p class="muted small">Pedile al organizador un código para tu ID '+esc(me.uid)+' y región '+esc(me.region)+'. Solo funciona para este perfil y se usa una vez.</p>'+
+      '<div class="field"><label>Mi código exclusivo</label><input id="activationInput" type="text" maxlength="15" spellcheck="false" autocomplete="off" placeholder="JS-XXXXXXXXXXXX" style="text-transform:uppercase"></div>'+
+      '<button class="btn primary full" onclick="activatePlayer()">Activar mi cuenta</button><div class="note">El código caduca a los 15 minutos. El organizador debe entregártelo por un canal donde haya comprobado que controlás ese ID.</div></section>';
+   root.querySelector('.hero').insertAdjacentHTML('afterend',activation);
+  }else{
+   root.querySelector('.hero').insertAdjacentHTML('afterend','<div class="note success">✓ Cuenta autorizada por JS Family. Podés inscribirte en torneos de tu región.</div>');
+  }
+
   if(playerFocusEvent){
    const focus=t.find(x=>x.slug===playerFocusEvent);
    if(focus){
@@ -123,6 +133,7 @@ async function playerDashboard(){
 }
 async function playerJoin(slug){
  if(!playerSelf)return playerStart();
+ if(!playerSelf.verified)return tip('Necesitás activar tu cuenta con un código del administrador.');
  if(!confirm('¿Anotarte con '+playerSelf.nickname+' · ID '+playerSelf.uid+'?'))return;
  try{
   await api('/tournaments/'+encodeURIComponent(slug)+'/register',{method:'POST',body:JSON.stringify({})});
@@ -130,4 +141,18 @@ async function playerJoin(slug){
   playerFocusEvent=null;
   await playerDashboard();
  }catch(e){tip(e.message)}
+}
+
+async function activatePlayer(){
+ if(!playerSelf)return playerStart();
+ const code=(document.getElementById('activationInput')?.value||'').trim().toUpperCase().replace(/\\s+/g,'');
+ if(!/^JS-[0-9A-F]{12}$/.test(code))return tip('Código incorrecto. Debe tener el formato JS-XXXXXXXXXXXX.');
+ const btn=document.querySelector('#activationPanel button');if(btn)btn.disabled=true;
+ try{
+  await api('/player/activate',{method:'POST',body:JSON.stringify({code})});
+  const result=await api('/player/me');playerSelf=result.player;
+  tip('✅ ¡Tu cuenta fue activada! El código ya no sirve de nuevo.');
+  await playerDashboard();
+ }catch(e){tip(e.message)}
+ finally{if(btn)btn.disabled=false}
 }

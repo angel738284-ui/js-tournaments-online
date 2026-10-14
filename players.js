@@ -28,7 +28,7 @@ module.exports=function setupPlayerRoutes(app,{pool,findPlayer,limited,fail}){
    await pool.query("create index if not exists player_sessions_exp_idx on player_sessions(expires_at)");
  }
  function cleanPlayer(p){
-  return {id:p.id,uid:p.uid,region:p.region,nickname:p.nickname,level:p.level,createdAt:p.created_at};
+  return {id:p.id,uid:p.uid,region:p.region,nickname:p.nickname,level:p.level,createdAt:p.created_at,verified:!!p.verified_at};
  }
  async function loadUser(req){
    const all=req.headers.cookie||'';
@@ -36,7 +36,7 @@ module.exports=function setupPlayerRoutes(app,{pool,findPlayer,limited,fail}){
    if(!item)return null;
    const token=item.slice(COOKIE.length+1);
    if(!/^[0-9a-f]{64}$/.test(token))return null;
-   const q=await pool.query('select a.id,a.uid,a.region,a.nickname,a.level,a.created_at from player_accounts a join player_sessions s on s.player_id=a.id where s.token_hash=$1 and s.expires_at>now()', [digest(token)]);
+   const q=await pool.query('select a.id,a.uid,a.region,a.nickname,a.level,a.created_at,a.verified_at from player_accounts a join player_sessions s on s.player_id=a.id where s.token_hash=$1 and s.expires_at>now()', [digest(token)]);
    return q.rows[0]||null;
  }
  async function auth(req,res,next){
@@ -63,7 +63,7 @@ module.exports=function setupPlayerRoutes(app,{pool,findPlayer,limited,fail}){
      if(existing.rowCount)return fail(res,409,'Este ID ya tiene una cuenta. Entrá con tu contraseña.');
      const data=await findPlayer(uid,region);
      const passhash=credentials(password);
-     const q=await pool.query('insert into player_accounts(uid,region,nickname,level,password_hash) values($1,$2,$3,$4,$5) returning id,uid,region,nickname,level,created_at',[uid,region,data.nickname,data.level,passhash]);
+     const q=await pool.query('insert into player_accounts(uid,region,nickname,level,password_hash) values($1,$2,$3,$4,$5) returning id,uid,region,nickname,level,created_at,verified_at',[uid,region,data.nickname,data.level,passhash]);
      await issueSession(q.rows[0],res);
      res.status(201).json({ok:true,player:cleanPlayer(q.rows[0]),ownershipVerified:false});
    }catch(e){
@@ -77,7 +77,7 @@ module.exports=function setupPlayerRoutes(app,{pool,findPlayer,limited,fail}){
    const uid=String(req.body?.uid||''),region=String(req.body?.region||''),password=req.body?.password;
    if(!validUID(uid)||!RG.has(region)||typeof password!=='string')return fail(res,400,'Credenciales inválidas.');
    try{
-     const q=await pool.query('select id,uid,region,nickname,level,created_at,password_hash from player_accounts where uid=$1 and region=$2',[uid,region]);
+     const q=await pool.query('select id,uid,region,nickname,level,created_at,verified_at,password_hash from player_accounts where uid=$1 and region=$2',[uid,region]);
      if(!q.rowCount||!checkCredentials(password,q.rows[0].password_hash))return fail(res,401,'ID, región o contraseña incorrectos.');
      const user=q.rows[0];await issueSession(user,res);
      res.json({ok:true,player:cleanPlayer(user)});

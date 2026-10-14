@@ -123,6 +123,7 @@ async function init(){
   await pool.query('create index if not exists registrations_tournament_idx on registrations(tournament_id)');
 }
 const playerRoutes=require('./players')(app,{pool,findPlayer,limited,fail});
+const codeRoutes=require('./codes')(app,{pool,loadUser:playerRoutes.loadUser,admin,limited,fail});
 app.get('/health',async(req,res)=>{
   try{await pool.query('select 1');res.json({ok:true})}catch(e){res.status(503).json({ok:false})}
 });
@@ -156,6 +157,7 @@ app.post('/api/lookup',async(req,res)=>{
 });
 app.post('/api/tournaments/:slug/register',playerRoutes.auth,async(req,res,next)=>{
   if(limited(req,'register',8,10*60000))return fail(res,429,'Demasiados registros desde esta conexión');
+  if(!req.player.verified_at)return fail(res,403,'Primero activá tu cuenta con el código exclusivo del organizador.');
   const uid=req.player.uid;
   let t;try{t=await getTournament(req.params.slug)}catch(e){return next(e)}
   if(!t)return fail(res,404,'Torneo no encontrado');
@@ -234,4 +236,4 @@ app.post('/api/admin/tournaments/:slug/winner',admin,async(req,res,next)=>{
 app.use(express.static(path.join(__dirname,'public'),{maxAge:'5m'}));
 app.get(['/','/player','/admin','/t/:slug'],(req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
 app.use((err,req,res,next)=>{console.error('API Error:',err.code||err.message);fail(res,500,'Error temporal del servidor')});
-init().then(()=>playerRoutes.init()).then(()=>app.listen(process.env.PORT||10000,'0.0.0.0',()=>console.log('JS Tournaments online ready'))).catch(e=>{console.error('Database init failed:',e.message);process.exit(1)});
+init().then(()=>playerRoutes.init()).then(()=>codeRoutes.init()).then(()=>app.listen(process.env.PORT||10000,'0.0.0.0',()=>console.log('JS Tournaments online ready'))).catch(e=>{console.error('Database init failed:',e.message);process.exit(1)});

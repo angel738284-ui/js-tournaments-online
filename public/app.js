@@ -144,7 +144,8 @@ async function adminHome(){
   const selected=new URLSearchParams(location.search).get('event');
   if(selected)return adminTournament(selected);
   try{
-    const d=await api('/tournaments');
+    const [d,accounts]=await Promise.all([api('/tournaments'),api('/admin/players')]);
+    const pending=(accounts.players||[]).filter(p=>!p.verified);
     root.innerHTML=hero('Organizá tus torneos','Creá un torneo nuevo, compartí el enlace y los jugadores se registran desde su celular.','⚙ PANEL PRIVADO',
       '<div class="btnrow">'+button('Cerrar sesión','logout()','outline')+'</div>')+
       '<div class="twocol"><div class="panel"><h2>➕ Nuevo torneo</h2><form onsubmit="createTournament(event)">'+
@@ -155,6 +156,17 @@ async function adminHome(){
       '<div class="panel"><h2>Cómo funciona</h2><p>① Creás un torneo y copiás su enlace.</p><p>② Cada jugador entra y coloca su ID. El sistema obtiene el nickname.</p><p>③ Cerrás las inscripciones y sorteás las llaves.</p><p>④ Elegís ganadores y aparecen automáticamente en la ronda siguiente.</p>'+
       '<div class="note">La verificación de ID consulta una API comunitaria, no oficial. No comprueba la propiedad de la cuenta.</div></div></div>'+
       '<h2>Mis torneos</h2>'+(d.tournaments.length?'<div class="grid">'+d.tournaments.map(t=>eventCard(t,true)).join('')+'</div>':empty('🏆','Todavía no hay torneos','Creá el primero desde el formulario.'));
+    const codePanel='<section class="panel" id="codePanel"><span class="eyebrow">🔐 AUTORIZACIÓN DE JUGADORES</span><h2 style="margin-top:10px">Códigos exclusivos de activación</h2>'+
+      '<p class="muted small">Primero el jugador crea su cuenta JS TOURNAMENTS. Cuando confirmes quién es dentro de Free Fire, generás un código para su ID y región.</p>'+
+      '<div class="twocol"><div class="field"><label>ID del jugador</label><input id="codeUid" inputmode="numeric" maxlength="15" placeholder="ID de Free Fire"></div>'+
+      '<div class="field"><label>Región del jugador</label><select id="codeRegion"><option value="SAC">SAC · Región Sur</option><option value="US">US · Región Norte</option><option value="BR">Brasil</option><option value="NA">Norteamérica</option><option value="SG">Singapur</option><option value="IND">India</option><option value="EU">Europa</option><option value="BD">Bangladés</option></select></div></div>'+
+      '<button class="btn primary" id="makeCodeBtn" onclick="makeActivationCode()">Generar código de un solo uso</button>'+
+      '<div id="activationResult"></div><div class="note">Cada código vence a los 15 minutos, solo funciona para el ID y región seleccionados y queda inválido después de activarse. No demuestra por sí solo la propiedad del ID.</div>'+
+      '<h3>Cuentas pendientes ('+pending.length+')</h3>'+
+      (pending.length?pending.map(p=>`<div class="player"><div class="player-body"><div class="player-name">${esc(p.nickname)}</div><small>ID ${esc(p.uid)} · ${esc(p.region)}</small></div><button class="btn small" onclick="prefillActivation('${p.uid}','${p.region}')">Seleccionar</button></div>`).join(''):
+        '<div class="muted small">No hay cuentas pendientes entre las últimas 200.</div>')+
+      '</section>';
+    root.querySelector('.hero').insertAdjacentHTML('afterend',codePanel);
   }catch(e){root.innerHTML=empty('⚠','Error del panel',e.message)}
 }
 async function createTournament(e){
@@ -222,3 +234,30 @@ setInterval(()=>{
   if(location.pathname.startsWith('/t/')&&document.activeElement?.id!=='uidInput'&&!busyLookup)return loadTournament();
   if(location.pathname==='/admin'&&new URLSearchParams(location.search).has('event'))return adminTournament(new URLSearchParams(location.search).get('event'));
 },25000);
+
+function prefillActivation(uid,region){
+ const input=document.getElementById('codeUid'),sel=document.getElementById('codeRegion');
+ if(!input||!sel)return;
+ input.value=uid;sel.value=region;
+ document.getElementById('codePanel')?.scrollIntoView({behavior:'smooth'});
+}
+async function makeActivationCode(){
+ const uid=(document.getElementById('codeUid')?.value||'').trim();
+ const region=document.getElementById('codeRegion')?.value;
+ if(!/^[0-9]{5,15}$/.test(uid))return tip('Colocá el ID numérico del jugador registrado.');
+ const btn=document.getElementById('makeCodeBtn'),box=document.getElementById('activationResult');
+ if(btn)btn.disabled=true;
+ try{
+  const result=await api('/admin/codes',{method:'POST',body:JSON.stringify({uid,region})});
+  box.innerHTML='<div class="note success"><strong>✓ Código exclusivo para '+esc(result.nickname)+'</strong><p class="small" style="margin:6px 0">ID '+esc(result.uid)+' · Región '+esc(result.region)+' · Se invalida al usarlo o después de 15 minutos.</p>'+
+    '<div class="share"><input id="issuedCode" value="'+esc(result.code)+'" readonly><button class="btn primary" onclick="copyIssuedCode()">Copiar código</button></div></div>';
+  tip('Código creado para '+result.nickname);
+ }catch(e){tip(e.message)}
+ finally{if(btn)btn.disabled=false}
+}
+async function copyIssuedCode(){
+ const el=document.getElementById('issuedCode');
+ if(!el)return;
+ try{await navigator.clipboard.writeText(el.value);tip('✓ Código copiado')}
+ catch(e){el.select();document.execCommand('copy');tip('Código seleccionado para copiar')}
+}
